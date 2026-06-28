@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC地下城 · 黑暗纪元 重制版</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:"微软雅黑",sans-serif;user-select:none}
+        body{background:#0b0b12;color:#eee;display:flex;justify-content:center;padding:10px}
+        #game{width:1050px;height:750px;background:#121522;border:3px solid #00e5ff;border-radius:10px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+        .screen{width:100%;height:100%;padding:15px;display:none;flex-direction:column;overflow-y:auto}
+        .screen.active{display:flex}
+        .btn{background:#102840;border:2px solid #00e5ff;color:#fff;padding:6px 12px;margin:3px;border-radius:6px;cursor:pointer;font-size:13px;transition:all 0.2s}
+        .btn:hover{background:#1a3a5a;transform:translateY(-1px)}
+        .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+        .btn-danger{border-color:#ff5555;background:#301010}
+        .btn-green{border-color:#00ff99;background:#102820}
+        .btn-sm{padding:4px 8px;font-size:12px}
+        .top{display:flex;justify-content:space-between;margin-bottom:8px;padding:8px;background:#00101a;border-radius:6px;font-size:14px;flex-wrap:wrap}
+        .equipBar{background:#000a14;padding:6px;border-radius:6px;margin-bottom:4px;font-size:12px;display:flex;gap:20px;flex-wrap:wrap}
+        .petBar{background:#001a10;padding:4px 8px;border-radius:4px;font-size:12px;color:#88ff88;margin-bottom:4px;display:none}
+        .challengeBar{background:#1a1000;padding:4px 8px;border-radius:4px;font-size:11px;color:#ffaa00;margin-bottom:4px;display:none}
+        .battleArea{flex:1;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start;padding:10px;border:2px solid #00e5ff40;border-radius:8px;margin:8px 0;overflow-y:auto;min-height:150px}
+        .enemyCard{width:120px;padding:8px;border:2px solid #5588ff80;border-radius:6px;background:#051020;text-align:center;position:relative;transition:all 0.3s}
+        .enemyCard.selected{border-color:#ffdd00;box-shadow:0 0 12px #ffdd00;transform:scale(1.05)}
+        .enemyCard.boss{border-color:#ff5555;box-shadow:0 0 15px #ff5555}
+        .enemyCard .debuff-icons{font-size:14px;position:absolute;top:2px;right:4px}
+        .logBox{height:100px;background:#000810;border:1px solid #00e5ff30;padding:6px;overflow-y:auto;font-size:12px;line-height:1.4}
+        .bagItem{display:inline-block;padding:4px 7px;margin:3px;border:1px solid #4488ff;border-radius:4px;font-size:11px;cursor:pointer;position:relative}
+        .bagItem.equip{border-color:#ffd000;background:#201a00}
+        .shop-item{padding:8px;margin:4px;border:1px solid #0cf;border-radius:4px;display:inline-block;width:220px;background:#0a1828;font-size:12px;vertical-align:top;position:relative}
+        .item-tag{position:absolute;top:2px;right:2px;color:#fff;font-size:10px;padding:1px 4px;border-radius:3px}
+        .actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+        .achievement-toast{position:absolute;left:20px;bottom:20px;background:#1e2a3a;border:2px solid #ffd700;color:#ffd700;padding:10px 20px;border-radius:8px;font-size:14px;display:none;z-index:10;box-shadow:0 0 15px rgba(255,215,0,0.5);animation:fadeInOut 2.5s ease-in-out}
+        @keyframes fadeInOut{0%{opacity:0;transform:translateY(10px)}10%{opacity:1;transform:translateY(0)}80%{opacity:1}100%{opacity:0}}
+        @keyframes floatUp{0%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-30px)}}
+        .achievement-list{overflow-y:auto;flex:1;padding:10px}
+        .achieve-item{margin:8px 0;padding:8px;background:#0a1520;border-radius:6px;border:1px solid #2a3a5a}
+        .progress-bar{background:#203040;height:8px;border-radius:4px;margin:4px 0;overflow:hidden}
+        .progress-fill{background:#00e5ff;height:100%;border-radius:4px;transition:width 0.3s}
+        .map-grid{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+        .map-card{width:200px;padding:12px;border:2px solid #334466;border-radius:8px;background:#0a1520;cursor:pointer;transition:all 0.2s}
+        .map-card:hover{border-color:#00e5ff;box-shadow:0 0 10px #00e5ff40}
+        .map-card.locked{opacity:0.5;pointer-events:none;filter:grayscale(0.5)}
+        .trader-item{display:flex;justify-content:space-between;align-items:center;padding:10px;margin:6px 0;background:#001a1a;border:1px solid #0cf;border-radius:6px}
+        .trader-item.sold{opacity:0.4;pointer-events:none}
+        .float-text{position:absolute;left:50%;top:30%;transform:translateX(-50%);font-weight:bold;font-size:14px;pointer-events:none;z-index:100;animation:floatUp 1.2s ease-out forwards}
+        .resource-bar{display:flex;gap:20px;margin-bottom:4px;font-size:12px;color:#ccc}
+        .quality-common { color: #aaa; }
+        .quality-rare { color: #55ff55; }
+        .quality-unique { color: #ffaa00; }
+        .quality-gilded { color: #ff8800; text-shadow: 0 0 3px #ff8800; }
+    </style>
+</head>
+<body>
+<div id="game">
+    <div id="achievementToast" class="achievement-toast">🏆 成就解锁</div>
+    <div class="screen active" id="storyScreen">
+        <h1 style="color:#00e5ff">MC地下城 · 黑暗纪元</h1>
+        <p>回合制战斗 | 经典主线+黑暗纪元 | DLC扩展</p><br>
+        <button class="btn" onclick="enterGame()">开始游戏</button>
+        <button class="btn" onclick="clearAllData()">清空存档</button>
+    </div>
+    <div class="screen" id="mapScreen">
+        <h2>选择地图</h2>
+        <p>绿宝石：<span id="mapGem">50</span></p><br>
+        <div class="map-grid" id="mapGrid"></div><br>
+        <button class="btn" onclick="openShop()">商店</button>
+        <button class="btn" onclick="openAchievements()">🏆 成就</button>
+        <button class="btn" onclick="openBag()">背包</button>
+        <button class="btn" onclick="openEnchantScreen()">🔮 附魔台</button>
+        <button class="btn btn-danger" onclick="backStory()">返回</button>
+    </div>
+    <div class="screen" id="shopScreen">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>营地商店</h2>
+            <button class="btn btn-danger btn-sm" onclick="backMap()">返回</button>
+        </div>
+        <p>绿宝石：<span id="shopGem">50</span></p>
+        <div id="shopList"></div>
+        <button class="btn btn-green" onclick="refreshShop()">刷新商品(1绿宝石)</button>
+    </div>
+    <div class="screen" id="achievementScreen">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>🏆 成就</h2>
+            <button class="btn btn-danger btn-sm" onclick="backMap()">返回</button>
+        </div>
+        <div class="achievement-list" id="achievementList"></div>
+    </div>
+    <div class="screen" id="enchantScreen">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>🔮 附魔台</h2>
+            <button class="btn btn-danger btn-sm" onclick="backMap()">返回</button>
+        </div>
+        <p>附魔点：<span id="enchantPointsDisplay">0</span></p>
+        <div id="enchantOptions"></div>
+    </div>
+    <div class="screen" id="battleScreen">
+        <div class="top"><div>HP：<span id="hpText">120/120</span></div><div>波次：<span id="waveText">1/5</span></div><div>击杀：<span id="killText">0/20</span></div><div>绿宝石：<span id="battleGem">50</span></div></div>
+        <div class="resource-bar"><span>💀灵魂：<span id="soulText">0</span></span></div>
+        <div class="equipBar" id="equipBar">加载中...</div>
+        <div id="petBar" class="petBar">🐺 铁傀儡：HP 150/150</div>
+        <div id="challengeBar" class="challengeBar">⚡ 当前挑战：赤手空拳 (进行中)</div>
+        <div class="battleArea" id="enemyBox"></div>
+        <div class="logBox" id="log"></div>
+        <div class="actions">
+            <button class="btn" onclick="playerAct(1)">⚔️近战</button>
+            <button class="btn" onclick="playerAct(2)">🏹远程</button>
+            <button class="btn" id="magicBtn" onclick="playerAct(3)">✨法器</button>
+            <button class="btn" onclick="openBag()">背包</button>
+            <button class="btn btn-danger" onclick="tryRetreat()">撤离</button>
+        </div>
+    </div>
+    <div class="screen" id="bagScreen">
+        <h2>背包｜点击装备，点击「卖」出售</h2>
+        <p>近战武器</p><div id="bagW" class="bag"></div>
+        <p>远程武器</p><div id="bagR" class="bag"></div>
+        <p>法器/消耗品</p><div id="bagM" class="bag"></div>
+        <p>盔甲防具</p><div id="bagA" class="bag"></div>
+        <button class="btn" onclick="closeBag()">返回</button>
+    </div>
+    <div class="screen" id="traderScreen" style="background:#0b1a1a;justify-content:center;align-items:center">
+        <div style="width:90%;max-width:700px"><h2 style="color:#ffaa00">🎪 游行商人出现了！</h2><p style="margin-bottom:15px">他只有片刻停留，所有商品半价优惠，每件仅售一件，错过不再有。</p><div id="traderList"></div><button class="btn btn-danger" onclick="closeTrader()">离开商人</button></div>
+    </div>
+    <div class="screen" id="storyPopupScreen" style="background:#0b1a1a;justify-content:center;align-items:center">
+        <div style="width:80%;max-width:600px;text-align:center"><h2 id="storyTitle" style="color:#ffaa00">剧情</h2><p id="storyText" style="margin:20px 0;line-height:1.8"></p><button class="btn" id="storyContinueBtn" onclick="startBattleAfterStory()">出发！</button></div>
+    </div>
+</div>
+
+<script>
+// ===================== 核心工具与全局状态 =====================
+const clamp = (n, max) => Math.max(0, Math.min(n, max));
+const RND = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const BASE_MAX_HP = 120;
+
+let maxHp = BASE_MAX_HP, gem = 50, playerHp = maxHp, currentWave = 1, killCnt = 0;
+let isLock = false, targetIndex = 0, currentStageId = -1, enemies = [];
+let equip = { w: 0, r: 0, m: 0, a: 0 };
+let own = { w: [{idx:0, q:'common'}], r: [{idx:0, q:'common'}], m: [{idx:0, q:'common'}], a: [{idx:0, q:'common'}] };
+let magicCd = [], magicUsed = [], shopData = { w: [], r: [], m: [], a: [] };
+let summonPet = null, battleDeadImmuneUsed = false, rangeCd = 0, firstHitUsed = false;
+let bossPhase = 0, bossCounter = 0, waveClearing = false, traderChances = 2, traderItems = [];
+let soul = 0, enchantPoints = 0, playerSlow = 0, totalKillsAllTime = 0;
+let chainsawHeat = 0, energyBowStacks = 0;
+let enchants = { critRate: 0, baseAtk: 0, maxHpUp: 0, soulGain: 0, dodgeRate: 0 };
+let buff = {}, battleStats = {}, achieveProgress = {}, retreatStreak = 0;
+let stageVisited = [], stageCompleted = [], unlockedMaps = [0], darkAgeUnlocked = false, dlcUnlocked = false;
+let currentPhase = 0, phaseData = null, keySpiritActive = false, isInBattle = false;
+let partyChefKill = 0, partyOtherKill = 0, beaconActivated = false;
+
+const QUALITY_MULT = { common: 1.0, rare: 1.5, unique: 2.0, gilded: 2.5 };
+const QUALITY_COLORS = { common: '#aaa', rare: '#55ff55', unique: '#ffaa00', gilded: '#ff8800' };
+const QUALITY_NAMES = { common: '普通', rare: '稀有', unique: '独特', gilded: '镀金' };
+
+// ===================== 数据定义 =====================
+const WEAPON = [
+    {name:"拳头", atk:4, price:0, type:"norm", msg:"赤手空拳", tag:"基础"},
+    {name:"木剑", atk:4, price:4, type:"norm", msg:"朴实一击", tag:"基础"},
+    {name:"石剑", atk:5, price:6, type:"norm", msg:"厚重劈砍", tag:"基础"},
+    {name:"铁剑", atk:6, price:8, type:"norm", msg:"寒铁破空", tag:"基础"},
+    {name:"金剑", atk:7, price:10, type:"crit", val:10, msg:"致命一击", tag:"暴击"},
+    {name:"钻石剑", atk:8, price:12, type:"norm", msg:"钻石锋芒", tag:"稳定"},
+    {name:"燃烧斧", atk:8, price:14, type:"burn", val:50, msg:"烈焰缠绕", tag:"燃烧"},
+    {name:"窃心者", atk:10, price:20, type:"lifesteal", val:7, msg:"汲取生机", tag:"吸血"},
+    {name:"锯齿弯刀", atk:7, price:12, type:"bleed", val:2, msg:"割裂伤口", tag:"流血"},
+    {name:"破甲战戟", atk:11, price:20, type:"armorBreak", val:50, msg:"破铠碎甲", tag:"破甲"},
+    {name:"冰霜长剑", atk:9, price:18, type:"freeze", val:30, msg:"寒气覆身", tag:"冰冻"},
+    {name:"灵魂收割者", atk:13, price:25, type:"soul", val:1, msg:"收割亡魂", tag:"成长"},
+    {name:"闪电拳套", atk:6, price:16, type:"chain", val:3, msg:"电光连锁", tag:"连锁"},
+    {name:"黑曜石巨刃", atk:22, price:32, type:"selfStun", val:1, msg:"超重斩击", tag:"失衡"},
+    {name:"治愈之杖", atk:5, price:14, type:"healSelf", val:8, msg:"微光自愈", tag:"治疗"},
+    {name:"反刺匕首", atk:8, price:15, type:"thorns", val:30, msg:"暗藏倒刺", tag:"反伤"},
+    {name:"远古巨剑", atk:15, price:28, type:"defDown", msg:"重压破防", tag:"降防"},
+    {name:"暗影短刀", atk:9, price:22, type:"backstab", val:20, msg:"暗影突袭", tag:"背刺"},
+    {name:"皇家长剑", atk:10, price:24, type:"selfCut", val:5, msg:"王族祝福", tag:"减伤"},
+    {name:"熔核之脊", atk:18, price:35, type:"burn", val:70, msg:"熔岩爆发", tag:"自损燃烧"},
+    {name:"寒霜之握", atk:12, price:28, type:"freeze", val:50, msg:"极寒冰封", tag:"冰冻"},
+    {name:"链锯剑", atk:14, price:30, type:"chainsaw", msg:"连续攻击后需冷却", tag:"过热"},
+    {name:"寒牙手刺", atk:11, price:26, type:"weaken", val:50, msg:"降低敌人攻击", tag:"降攻"},
+    {name:"月蚀之刃", atk:16, price:34, type:"overflow", msg:"击杀溢出转移", tag:"溢出"},
+    {name:"海绵突刺", atk:9, price:22, type:"multihit", val:30, msg:"概率连击", tag:"连击"}
+];
+
+const RANGE = [
+    {name:"投石", atk:3, price:0, type:"norm", msg:"随手扔出", tag:"基础"},
+    {name:"木弓", atk:5, price:5, type:"norm", msg:"基础远程", tag:"基础"},
+    {name:"石弓", atk:6, price:7, type:"norm", msg:"稳固输出", tag:"基础"},
+    {name:"铁弓", atk:7, price:9, type:"norm", msg:"精铁疾射", tag:"基础"},
+    {name:"钻石弓", atk:9, price:13, type:"norm", msg:"锋利箭矢", tag:"稳定"},
+    {name:"连发弓", atk:6, price:14, type:"multi2", msg:"双箭连射", tag:"连射"},
+    {name:"爆炸弩", atk:12, price:20, type:"splash", msg:"爆裂重击", tag:"爆炸"},
+    {name:"毒刺短弓", atk:7, price:13, type:"poison", val:3, msg:"淬毒侵蚀", tag:"中毒"},
+    {name:"穿透长弓", atk:10, price:19, type:"pierce", val:70, msg:"贯穿敌群", tag:"穿透"},
+    {name:"冰冻弩", atk:8, price:17, type:"freeze", val:40, msg:"极寒冰封", tag:"冰冻"},
+    {name:"多重箭袋", atk:5, price:16, type:"multi3", msg:"乱箭齐发", tag:"散射"},
+    {name:"狙击重弓", atk:18, price:28, type:"cd2", msg:"蓄力狙击", tag:"冷却"},
+    {name:"火焰弓", atk:9, price:15, type:"burn", val:50, msg:"燃火箭矢", tag:"燃烧"},
+    {name:"末影弓", atk:12, price:24, type:"execute", val:20, msg:"斩杀残血", tag:"斩杀"},
+    {name:"震荡弹弓", atk:6, price:14, type:"atkDownDebuff", val:50, msg:"瓦解力量", tag:"降攻"},
+    {name:"追风长弓", atk:8, price:21, type:"firstHit", msg:"先手疾风", tag:"先手"},
+    {name:"爆裂箭弩", atk:11, price:23, type:"smallSplash", msg:"小型爆裂", tag:"溅射"},
+    {name:"凋零之弓", atk:10, price:27, type:"wither", msg:"凋零衰败", tag:"凋零"},
+    {name:"圣愈轻弓", atk:7, price:19, type:"bowHeal", val:5, msg:"圣光箭矢", tag:"治疗"},
+    {name:"虚空行者", atk:14, price:32, type:"pierce", val:90, msg:"穿透递增", tag:"穿透"},
+    {name:"能量弓", atk:10, price:30, type:"energybow", msg:"伤害递增", tag:"成长"},
+    {name:"泡影弓", atk:8, price:24, type:"bind", val:40, msg:"概率束缚", tag:"控制"},
+    {name:"风之长弓", atk:12, price:33, type:"instakill", val:4, msg:"概率秒杀", tag:"即死"}
+];
+
+const MAGIC = [
+    {name:"无", cd:0, price:0, type:"none", msg:"未装备", once:false, tag:"无", soulCost:0},
+    {name:"护盾护符", cd:3, price:25, type:"shield", msg:"抵挡下次伤害", once:false, tag:"防御", soulCost:5},
+    {name:"狂风咒书", cd:5, price:35, type:"allDmg", val:20, msg:"群体20伤害", once:false, tag:"群伤", soulCost:10},
+    {name:"雷霆法杖", cd:2, price:25, type:"nextThunder", val:15, msg:"下次附加雷伤", once:false, tag:"附魔", soulCost:8},
+    {name:"腐化信标", cd:6, price:35, type:"hpHalf", msg:"全场血量减半", once:false, tag:"诅咒", soulCost:15},
+    {name:"藤蔓种包", cd:3, price:30, type:"allBind", msg:"全场禁锢", once:false, tag:"控制", soulCost:10},
+    {name:"治疗药水", cd:0, price:20, type:"itemHeal", msg:"恢复30生命", once:true, tag:"治疗", soulCost:0, consumable:true},
+    {name:"力量药水", cd:0, price:22, type:"buffAtk", val:3, msg:"攻击提升50%", once:true, tag:"增伤", soulCost:0, consumable:true},
+    {name:"抗性药水", cd:0, price:25, type:"buffReduce", val:2, msg:"减伤70%", once:true, tag:"防御", soulCost:0, consumable:true},
+    {name:"火焰弹", cd:3, price:23, type:"allFire", val:15, msg:"烈焰全场", once:false, tag:"群伤", soulCost:8},
+    {name:"召唤铁傀儡", cd:8, price:35, type:"summonGolem", msg:"召唤铁傀儡", once:false, tag:"召唤", soulCost:12},
+    {name:"隐身药水", cd:0, price:30, type:"buffHide", val:2, msg:"隐匿免伤", once:true, tag:"隐身", soulCost:0, consumable:true},
+    {name:"迟缓药水", cd:4, price:18, type:"enemyAtkDown", val:2, msg:"敌方攻击降低", once:false, tag:"降攻", soulCost:5},
+    {name:"经验瓶", cd:0, price:28, type:"buffGem", msg:"宝石翻倍", once:true, tag:"财富", soulCost:0, consumable:true},
+    {name:"净化结晶", cd:3, price:21, type:"cleanDebuff", msg:"清除负面", once:false, tag:"净化", soulCost:5},
+    {name:"狂暴药剂", cd:5, price:26, type:"buffCrazy", val:3, msg:"攻击暴涨", once:false, tag:"狂暴", soulCost:10},
+    {name:"空间碎片", cd:7, price:33, type:"skipEnemy", msg:"跳过敌方回合", once:false, tag:"控制", soulCost:15},
+    {name:"恶魂之泪", cd:4, price:30, type:"allFire", val:20, msg:"恶魂烈焰", once:false, tag:"群伤", soulCost:12},
+    {name:"末影移位器", cd:2, price:28, type:"skipEnemy", msg:"短距瞬移跳过", once:false, tag:"控制", soulCost:10},
+    {name:"幽匿探测器", cd:6, price:32, type:"summonWarden", msg:"召唤潜声守卫", once:false, tag:"召唤", soulCost:12}
+];
+
+const ARMOR = [
+    {name:"布衣", cut:0, price:0, type:"norm", msg:"毫无防护", tag:"基础", bonusHp:0},
+    {name:"猎人夹克", cut:5, price:18, type:"bowDmgUp", msg:"远程伤害提升", tag:"远程", bonusHp:10},
+    {name:"迅捷外套", cut:8, price:18, type:"dodge", val:20, msg:"20%闪避", tag:"闪避", bonusHp:10},
+    {name:"铁甲", cut:15, price:12, type:"norm", msg:"基础减伤", tag:"防御", bonusHp:15},
+    {name:"钻石甲", cut:30, price:25, type:"norm", msg:"高额减伤", tag:"防御", bonusHp:20},
+    {name:"下界合金甲", cut:40, price:38, type:"explosionRes", val:80, msg:"防爆80%", tag:"防爆", bonusHp:25},
+    {name:"荆棘甲", cut:20, price:22, type:"armorThorns", val:50, msg:"反伤50%", tag:"反伤", bonusHp:15},
+    {name:"治疗长袍", cut:10, price:20, type:"turnHeal", val:10, msg:"每回合回血", tag:"回复", bonusHp:10},
+    {name:"潜行外套", cut:5, price:26, type:"dodge", val:40, msg:"40%闪避", tag:"闪避", bonusHp:10},
+    {name:"岩浆行者胸甲", cut:25, price:24, type:"fireImmune", msg:"免疫灼烧", tag:"免疫", bonusHp:20},
+    {name:"末影胸甲", cut:20, price:32, type:"deadImmune", msg:"绝境锁血", tag:"保命", bonusHp:20},
+    {name:"卫道士重甲", cut:22, price:21, type:"meleeRes", msg:"近战减免", tag:"近防", bonusHp:18},
+    {name:"蜘蛛软甲", cut:12, price:17, type:"poisonImmune", msg:"免疫中毒", tag:"免疫", bonusHp:12},
+    {name:"苦力怕防护服", cut:18, price:23, type:"explosionRes", val:40, msg:"防爆减伤", tag:"防爆", bonusHp:15},
+    {name:"远古法袍", cut:14, price:29, type:"cdCut", msg:"冷却缩减", tag:"冷却", bonusHp:12},
+    {name:"血色护甲", cut:16, price:27, type:"lowHpDmgUp", msg:"低血增伤", tag:"绝境", bonusHp:15},
+    {name:"圣光铠甲", cut:25, price:34, type:"turnClean", msg:"每回合净化", tag:"净化", bonusHp:20},
+    {name:"深渊外衣", cut:22, price:31, type:"debuffShort", msg:"减益缩短", tag:"减益", bonusHp:18},
+    {name:"游侠轻甲", cut:11, price:20, type:"bowRes", msg:"远程减免", tag:"远防", bonusHp:10},
+    {name:"沉寂法袍", cut:18, price:36, type:"dodge", val:60, msg:"高闪避", tag:"闪避", bonusHp:10}
+];
+
+const MON = [
+    {name:"僵尸", hp:18, atk:8}, {name:"骷髅", hp:25, atk:10}, {name:"苦力怕", hp:25, atk:12},
+    {name:"蜘蛛", hp:20, atk:14}, {name:"洞穴蜘蛛", hp:18, atk:12}, {name:"卫道士", hp:40, atk:18},
+    {name:"掠夺者", hp:35, atk:16}, {name:"劫掠兽", hp:80, atk:22}, {name:"女巫", hp:30, atk:12},
+    {name:"史莱姆", hp:20, atk:8, split:true}, {name:"唤魔者", hp:50, atk:18, summon:true},
+    {name:"恼鬼", hp:10, atk:12}, {name:"皇家守卫", hp:60, atk:22}, {name:"厨师卫道士", hp:35, atk:16},
+    {name:"末影人", hp:100, atk:22}, {name:"铁傀儡", hp:150, atk:25}, {name:"烈焰人", hp:35, atk:15},
+    {name:"凋零骷髅", hp:45, atk:16}, {name:"岩浆怪", hp:40, atk:10, split:true}, {name:"猪灵蛮兵", hp:50, atk:18, block:30},
+    {name:"恶魂", hp:60, atk:20}, {name:"末影螨", hp:15, atk:8}, {name:"潜影贝", hp:30, atk:12},
+    {name:"监守者", hp:200, atk:28, enrage:true}, {name:"骷髅尖兵", hp:30, atk:14}, {name:"低语者", hp:35, atk:16},
+    {name:"藤蔓", hp:25, atk:10}, {name:"唤风师", hp:45, atk:18}
+];
+
+const STAGE = [
+    {id:0, name:"苦力怕森林", maxWave:6, goal:15, mon:[0,1,2,3,5,6], boss:14, bossName:"末影人", bossHp:120, bossAtk:24, reward:15, unlock:1},
+    {id:1, name:"南瓜牧场", maxWave:5, goal:15, mon:[2,5,6,10,11], boss:10, bossName:"唤魔者", bossHp:60, bossAtk:20, reward:25, unlock:2},
+    {id:2, name:"潮湿沼泽", maxWave:5, goal:25, mon:[0,1,8,3,9], boss:8, bossName:"锅釜怪", bossHp:100, bossAtk:18, reward:35, unlock:3},
+    {id:3, name:"烈焰锻造厂", maxWave:8, goal:20, mon:[6,5,18], boss:null,
+        phases:[{type:"wave", count:8, explodeDamage:20},{type:"boss", bossName:"红石巨兽", bossHp:200, bossAtk:28, mechanic:"core"}],
+        reward:45, unlock:4},
+    {id:4, name:"沙漠神殿", maxWave:6, goal:15, mon:[0,1,2,3,5,6], boss:null,
+        phases:[{type:"keySpirit"},{type:"kill", target:35, trapChance:0.45, trapDamage:35},{type:"boss", bossName:"无名者", bossHp:250, bossAtk:30, clone:true}],
+        reward:60, unlock:5},
+    {id:5, name:"高墩大厅", maxWave:8, goal:35, mon:[5,6,12,8], boss:null,
+        phases:[{type:"kill", target:35, statMult:1.5},{type:"party", chefKill:20, otherKill:20},{type:"kill", target:55, finalBoss:true, finalBossName:"唤魔者首领", finalBossHp:150, finalBossAtk:25}],
+        reward:200, unlock:6},
+    {id:6, name:"黑耀尖峰", maxWave:9, goal:50, mon:[5,6,12,14], boss:null,
+        phases:[{type:"kill", target:50, statMult:2.0},{type:"beacon", waveCount:3, killCount:40},{type:"finalBoss", boss1:"奇厄教主", boss1Hp:300, boss1Atk:35, boss2:"末影之心", boss2Hp:400, boss2Atk:40}],
+        reward:300, unlock:-1, isFinal:true},
+    {id:7, name:"烈焰人巢穴", maxWave:6, goal:20, mon:[16,17,18], boss:16, bossName:"烈焰领主", bossHp:180, bossAtk:22, reward:50, unlock:8, darkAge:true},
+    {id:8, name:"下界要塞", maxWave:7, goal:22, mon:[17,19,20], boss:20, bossName:"凋零风暴", bossHp:220, bossAtk:25, reward:80, unlock:9, darkAge:true},
+    {id:9, name:"末地深渊", maxWave:8, goal:28, mon:[21,22,14], boss:14, bossName:"虚空之龙", bossHp:300, bossAtk:30, reward:120, unlock:10, darkAge:true},
+    {id:10, name:"远古城市", maxWave:9, goal:30, mon:[23,22], boss:23, bossName:"监守者之王", bossHp:350, bossAtk:35, reward:200, unlock:-1, darkAge:true},
+    {id:11, name:"觉醒丛林", maxWave:7, goal:25, mon:[25,0,1,26], boss:null, phases:[{type:"kill", target:25},{type:"maze", kill:40},{type:"wave", count:5},{type:"boss", bossName:"丛林憎恶", bossHp:200, bossAtk:28}], reward:150, unlock:12, dlc:true},
+    {id:12, name:"嚎风山巅", maxWave:8, goal:20, mon:[6,5,27], boss:null, phases:[{type:"kill", target:20},{type:"beacon", waveCount:10, killCount:30},{type:"boss", bossName:"暴风魔像", bossHp:280, bossAtk:32}], reward:200, unlock:13, dlc:true},
+    {id:13, name:"悚伏寒冬", maxWave:9, goal:30, mon:[0,1,2,3], boss:14, bossName:"冰霜巨兽", bossHp:320, bossAtk:35, reward:250, unlock:14, dlc:true},
+    {id:14, name:"下界之火", maxWave:8, goal:28, mon:[16,18], boss:20, bossName:"熔岩巨人", bossHp:350, bossAtk:38, reward:250, unlock:15, dlc:true},
+    {id:15, name:"隐秘深渊", maxWave:9, goal:30, mon:[8,3], boss:23, bossName:"远古守卫者", bossHp:380, bossAtk:40, reward:300, unlock:16, dlc:true},
+    {id:16, name:"虚空回响", maxWave:10, goal:35, mon:[14,21], boss:14, bossName:"末影龙真身", bossHp:450, bossAtk:45, reward:300, unlock:-1, dlc:true},
+    {id:17, name:"试炼高塔", maxWave:99, goal:0, mon:[0,1,2,3,5,6,8,9,10,16,17,20], boss:14, bossName:"塔主", bossHp:500, bossAtk:50, reward:500, dlc:true}
+];
+
+// ===================== 存档与初始化 =====================
+function saveData() {
+    try {
+        localStorage.setItem('mcdungeon_v2', JSON.stringify({
+            achieveProgress, gem, own, equip, stageVisited, stageCompleted, unlockedMaps, darkAgeUnlocked, dlcUnlocked, soul, enchantPoints, totalKillsAllTime, enchants
+        }));
+    } catch (e) {}
+}
+
+function loadData() {
+    try {
+        let s = JSON.parse(localStorage.getItem('mcdungeon_v2'));
+        if (s) {
+            gem = s.gem || 50; equip = s.equip || equip;
+            stageVisited = s.stageVisited || []; stageCompleted = s.stageCompleted || [];
+            unlockedMaps = s.unlockedMaps || [0]; darkAgeUnlocked = s.darkAgeUnlocked || false; dlcUnlocked = s.dlcUnlocked || false;
+            soul = s.soul || 0; enchantPoints = s.enchantPoints || 0; totalKillsAllTime = s.totalKillsAllTime || 0;
+            enchants = s.enchants || { critRate: 0, baseAtk: 0, maxHpUp: 0, soulGain: 0, dodgeRate: 0 };
+            const migrate = (arr) => arr.map(o => typeof o === 'object' ? {idx: o.idx, q: o.q || 'common'} : {idx: o, q: 'common'});
+            own.w = migrate(s.own?.w || [{idx:0,q:'common'}]);
+            own.r = migrate(s.own?.r || [{idx:0,q:'common'}]);
+            own.m = migrate(s.own?.m || [{idx:0,q:'common'}]);
+            own.a = migrate(s.own?.a || [{idx:0,q:'common'}]);
+        }
+    } catch (e) {}
+    if (!own.w.some(o => o.idx === 0)) own.w.unshift({idx:0, q:'common'});
+    if (!own.r.some(o => o.idx === 0)) own.r.unshift({idx:0, q:'common'});
+    if (!own.m.some(o => o.idx === 0)) own.m.unshift({idx:0, q:'common'});
+    if (!own.a.some(o => o.idx === 0)) own.a.unshift({idx:0, q:'common'});
+    updateMaxHp();
+}
+
+function updateMaxHp() {
+    let armorObj = getEquipData('a');
+    let bonusHp = armorObj ? (armorObj.bonusHp || 0) : 0;
+    maxHp = BASE_MAX_HP + bonusHp + (enchants.maxHpUp * 10);
+    playerHp = Math.min(playerHp, maxHp);
+}
+
+// 获取装备实际数据（应用品质倍率）
+function getEquipData(type) {
+    let idx = equip[type];
+    let ownArr = type === 'w' ? own.w : type === 'r' ? own.r : type === 'm' ? own.m : own.a;
+    let item = ownArr.find(o => o.idx === idx);
+    if (!item) return null;
+    let base = type === 'w' ? WEAPON[idx] : type === 'r' ? RANGE[idx] : type === 'm' ? MAGIC[idx] : ARMOR[idx];
+    let mult = QUALITY_MULT[item.q] || 1;
+    let real = JSON.parse(JSON.stringify(base));
+    real.atk = Math.floor((real.atk || 0) * mult);
+    real.cut = Math.floor((real.cut || 0) * (mult > 1 ? mult * 0.8 : 1)); // 减伤收益略降防止超标
+    real.bonusHp = Math.floor((real.bonusHp || 0) * mult);
+    real.val = Math.floor((real.val || 0) * mult);
+    real.price = Math.floor((real.price || 0) * mult);
+    real.q = item.q;
+    real.mult = mult;
+    return real;
+}
+
+function clearAllData() {
+    if (confirm('确定要清空所有记录吗？')) {
+        localStorage.removeItem('mcdungeon_v2');
+        location.reload();
+    }
+}
+
+function switchScreen(id) {
+    document.querySelectorAll('.screen').forEach(o => o.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+function enterGame() { renderMapScreen(); switchScreen('mapScreen'); upMapGem(); }
+function backStory() { switchScreen('storyScreen'); }
+function backMap() { isInBattle = false; switchScreen('mapScreen'); upMapGem(); renderMapScreen(); }
+function openShop() { switchScreen('shopScreen'); if (!shopData.w.length) initShop(); renderShop(); document.getElementById('shopGem').innerText = gem; }
+function openAchievements() { switchScreen('achievementScreen'); renderAchievements(); }
+function openEnchantScreen() { switchScreen('enchantScreen'); renderEnchantOptions(); }
+function closeBag() { switchScreen(isInBattle ? 'battleScreen' : 'mapScreen'); }
+function upMapGem() { document.getElementById('mapGem').innerText = gem; }
+
+function addLog(txt) {
+    let log = document.getElementById('log');
+    if (!log) return;
+    log.innerHTML += txt + '<br>';
+    log.scrollTop = log.scrollHeight;
+}
+
+// ===================== 商店与背包 =====================
+function initShop() { refreshShopData(); }
+function refreshShopData() {
+    let wList=[], rList=[], mList=[], aList=[];
+    const getPool = (arr, ownArr) => {
+        let pool = [];
+        for (let i = 1; i < arr.length; i++) if (!ownArr.some(o => o.idx === i)) pool.push(i);
+        return pool;
+    };
+    let wPool=getPool(WEAPON,own.w), rPool=getPool(RANGE,own.r), mPool=getPool(MAGIC,own.m), aPool=getPool(ARMOR,own.a);
+    const fill = (pool, list, max) => { while(list.length<max){ if(pool.length){let idx=pool.splice(RND(0,pool.length-1),1)[0]; list.push({idx, q:randomQuality()});} else list.push(null);} };
+    fill(wPool, wList, 3); fill(rPool, rList, 3); fill(mPool, mList, 2); fill(aPool, aList, 2);
+    shopData = { w: wList, r: rList, m: mList, a: aList };
+}
+function randomQuality() { let r=RND(1,100); if(r<=5) return 'gilded'; if(r<=20) return 'unique'; if(r<=60) return 'rare'; return 'common'; }
+function refreshShop() {
+    if (gem < 1) return;
+    gem -= 1; refreshShopData(); renderShop(); upMapGem();
+}
+function renderShop() {
+    let html = '';
+    const genHtml = (item, type, arr) => {
+        if (!item) return `<div class="shop-item">售罄</div>`;
+        let it = arr[item.idx];
+        let mult = QUALITY_MULT[item.q];
+        let price = Math.floor(it.price * mult);
+        let qn = QUALITY_NAMES[item.q];
+        let qc = QUALITY_COLORS[item.q];
+        let icon = type==='w'?'⚔️':type==='r'?'🏹':type==='m'?'✨':'🛡️';
+        let stat = type==='m' ? `CD:${it.cd}` : type==='a' ? `减伤:${Math.floor((it.cut||0)*mult)}% 生命+${Math.floor((it.bonusHp||0)*mult)}` : `攻击+${Math.floor((it.atk||0)*mult)}`;
+        return `<div class="shop-item" style="border-color:${qc}">
+            <span class="item-tag" style="background:${qc}">${qn}</span>
+            ${icon} ${it.name}<br>${stat}｜价格:${price}<br>
+            <span style="font-size:10px;color:#888">${it.msg}</span><br>
+            <button class="btn btn-sm" onclick="buyItem('${type}',${item.idx},'${item.q}')">购买</button>
+        </div>`;
+    };
+    shopData.w.forEach(i => html += genHtml(i, 'w', WEAPON));
+    shopData.r.forEach(i => html += genHtml(i, 'r', RANGE));
+    shopData.m.forEach(i => html += genHtml(i, 'm', MAGIC));
+    shopData.a.forEach(i => html += genHtml(i, 'a', ARMOR));
+    document.getElementById('shopList').innerHTML = html;
+}
+function buyItem(type, idx, q) {
+    let arr = type==='w'?own.w:type==='r'?own.r:type==='m'?own.m:own.a;
+    let base = type==='w'?WEAPON[idx]:type==='r'?RANGE[idx]:type==='m'?MAGIC[idx]:ARMOR[idx];
+    if (arr.some(o => o.idx === idx)) return;
+    let price = Math.floor(base.price * QUALITY_MULT[q]);
+    if (gem < price) return;
+    gem -= price; arr.push({idx, q});
+    upMapGem(); document.getElementById('shopGem').innerText = gem;
+    shopData[type] = shopData[type].map(i => (i && i.idx === idx && i.q === q) ? null : i);
+    renderShop(); saveData();
+}
+
+function openBag() { switchScreen('bagScreen'); renderBag(); }
+function renderBag() {
+    const gen = (ownArr, equipIdx, type, itemArr) => {
+        let html = '';
+        ownArr.forEach(o => {
+            if (o.idx === 0) return;
+            let it = itemArr[o.idx];
+            let mult = QUALITY_MULT[o.q];
+            let qn = QUALITY_NAMES[o.q], qc = QUALITY_COLORS[o.q];
+            let stat = type==='m' ? `CD:${it.cd}` : type==='a' ? `减伤:${Math.floor((it.cut||0)*mult)}%` : `攻:${Math.floor((it.atk||0)*mult)}`;
+            let sellBtn = `<span class="btn-sm" onclick="event.stopPropagation();sellItem('${type}',${o.idx})" style="color:#ff8888;cursor:pointer">卖</span>`;
+            html += `<span class="bagItem ${equipIdx === o.idx ? 'equip' : ''}" onclick="equipItem('${type}',${o.idx})" style="border-color:${qc};color:${qc}">
+                ${it.name} [${qn}] ${stat} ${sellBtn}
+            </span>`;
+        });
+        return html;
+    };
+    document.getElementById('bagW').innerHTML = gen(own.w, equip.w, 'w', WEAPON);
+    document.getElementById('bagR').innerHTML = gen(own.r, equip.r, 'r', RANGE);
+    document.getElementById('bagM').innerHTML = gen(own.m, equip.m, 'm', MAGIC);
+    document.getElementById('bagA').innerHTML = gen(own.a, equip.a, 'a', ARMOR);
+}
+function equipItem(type, idx) {
+    equip[type] = idx;
+    if (type === 'a') updateMaxHp();
+    if (type === 'm') { magicCd[idx] = 0; magicUsed[idx] = false; }
+    renderBag(); upBattleUI(); saveData();
+}
+function sellItem(type, idx) {
+    if (idx === 0) return;
+    let arr = type==='w'?own.w:type==='r'?own.r:type==='m'?own.m:own.a;
+    let base = type==='w'?WEAPON[idx]:type==='r'?RANGE[idx]:type==='m'?MAGIC[idx]:ARMOR[idx];
+    let pos = arr.findIndex(o => o.idx === idx);
+    if (pos === -1) return;
+    if (equip[type] === idx) return;
+    let item = arr[pos];
+    let price = Math.floor(base.price * QUALITY_MULT[item.q] * 0.5); // 品质影响售价
+    gem += price; arr.splice(pos, 1);
+    renderBag(); upMapGem(); saveData();
+}
+
+// ===================== 附魔与成就 =====================
+function renderEnchantOptions() {
+    let html = '';
+    let opts = [
+        {key:'critRate', name:'暴击率 +2%'}, {key:'baseAtk', name:'基础攻击 +3'},
+        {key:'maxHpUp', name:'最大生命 +10'}, {key:'soulGain', name:'灵魂获取 +20%'},
+        {key:'dodgeRate', name:'闪避率 +3%'}
+    ];
+    opts.forEach(o => {
+        let maxed = enchants[o.key] >= 5;
+        html += `<div class="achieve-item"><b>${o.name}</b> (当前: ${enchants[o.key]}/5)<br>
+            <button class="btn btn-sm" onclick="purchaseEnchant('${o.key}')" ${enchantPoints < 1 || maxed ? 'disabled' : ''}>${maxed ? '已满' : '消耗1点升级'}</button></div>`;
+    });
+    document.getElementById('enchantOptions').innerHTML = html;
+    document.getElementById('enchantPointsDisplay').innerText = enchantPoints;
+}
+function purchaseEnchant(key) {
+    if (enchantPoints < 1 || enchants[key] >= 5) return;
+    enchantPoints--; enchants[key]++; updateMaxHp();
+    renderEnchantOptions(); saveData();
+}
+
+const ACHIEVEMENTS = [
+    {id:'undead', name:'亡灵杀手', desc:'击杀亡灵', tiers:[5,20,50], get:()=>achieveProgress.undead||0},
+    {id:'arthropod', name:'节肢杀手', desc:'击杀节肢', tiers:[5,20,50], get:()=>achieveProgress.arthropod||0},
+    {id:'boss', name:'屠龙者', desc:'击杀BOSS', tiers:[1,5,10], get:()=>achieveProgress.bossKill||0},
+    {id:'gold', name:'大富翁', desc:'累计宝石', tiers:[100,500,1000], get:()=>gem}
+];
+function renderAchievements() {
+    let html = '';
+    ACHIEVEMENTS.forEach(a => {
+        let cur = a.get(); let max = a.tiers[a.tiers.length-1]; let pct = Math.min(100, (cur/max)*100);
+        html += `<div class="achieve-item"><b>${a.name}</b><br>${a.desc} (${cur}/${max})
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div></div>`;
+    });
+    document.getElementById('achievementList').innerHTML = html;
+}
+
+// ===================== 地图渲染 =====================
+function renderMapScreen() {
+    let html = '';
+    for (let i = 0; i < STAGE.length; i++) {
+        let s = STAGE[i];
+        if (s.dlc && !dlcUnlocked) continue;
+        if (s.darkAge && !darkAgeUnlocked) continue;
+        if (s.locked) continue;
+        let locked = !unlockedMaps.includes(i) ? ' locked' : '';
+        let tag = s.dlc ? '🌌DLC' : s.darkAge ? '🌑黑暗' : s.isFinal ? '💀最终' : '⭐主线';
+        html += `<div class="map-card${locked}" onclick="${locked?'':'initStage('+i+')'}"><b>${s.name}</b><br>${tag}</div>`;
+    }
+    document.getElementById('mapGrid').innerHTML = html;
+}
+
+function initStage(sid) {
+    if (!stageVisited[sid]) {
+        stageVisited[sid] = true; saveData();
+        currentStageId = sid;
+        switchScreen('storyPopupScreen');
+        document.getElementById('storyTitle').innerText = STAGE[sid].name;
+        document.getElementById('storyText').innerText = "新的冒险开始了。准备好迎接挑战。";
+        return;
+    }
+    startBattle(sid);
+}
+function startBattleAfterStory() { startBattle(currentStageId); }
+
+// ===================== 战斗系统核心 =====================
+function startBattle(sid) {
+    isInBattle = true; currentStageId = sid; currentWave = 1; killCnt = 0; playerHp = maxHp; isLock = false;
+    enemies = []; targetIndex = 0; summonPet = null; battleDeadImmuneUsed = false; rangeCd = 0; firstHitUsed = false;
+    bossPhase = 0; bossCounter = 0; waveClearing = false; currentPhase = 0; phaseData = null;
+    keySpiritActive = false; partyChefKill = 0; partyOtherKill = 0; beaconActivated = false;
+    chainsawHeat = 0; energyBowStacks = 0; playerSlow = 0;
+
+    buff = { atkUp:0, atkDown:0, dmgReduce:0, invisible:0, gemDouble:false, bleedStack:[], poisonTurn:[], burnTurn:[], witherTurn:[], iceLock:[], soulAtk:0, nextThunder:0, berserk:0, shield:false, suspended:0, skipEnemyRound:false };
+    magicCd = new Array(MAGIC.length).fill(0);
+    magicUsed = new Array(MAGIC.length).fill(false);
+    battleStats = { damageTaken:0, goldEarned:0, hitTaken:0, fireHit:false };
+
+    let stage = STAGE[sid];
+    if (stage.phases && stage.phases.length > 0) startPhase(0);
+    else initSimpleWaveMode();
+    
+    switchScreen('battleScreen'); upBattleUI(); renderEnemy(); updateChallengeBar();
+}
+
+function initSimpleWaveMode() {
+    phaseData = { type: 'wave', count: STAGE[currentStageId].maxWave };
+    genWaveWithPhase();
+}
+
+function startPhase(index) {
+    let stage = STAGE[currentStageId];
+    if (!stage.phases || index >= stage.phases.length) { checkStageWin(); return; }
+    currentPhase = index; phaseData = stage.phases[index]; currentWave = 1; killCnt = 0; enemies = []; bossPhase = 0;
+    if (phaseData.type === 'beacon') beaconActivated = false;
+    if (phaseData.type === 'finalBoss') phaseData._boss2Spawned = false;
+    genWaveWithPhase(); renderEnemy(); upBattleUI();
+}
+
+function genWaveWithPhase() {
+    let stage = STAGE[currentStageId]; let pd = phaseData; enemies = [];
+    
+    if (pd.type === 'boss') {
+        enemies.push({ name: pd.bossName, hp: pd.bossHp, maxHp: pd.bossHp, atk: pd.bossAtk, def: 0, isBoss: true, isNewBoss: true });
+        addLog(`【BOSS】${pd.bossName} 出现！`);
+    } else if (pd.type === 'finalBoss') {
+        if (!pd._boss2Spawned) {
+            enemies.push({ name: pd.boss1, hp: pd.boss1Hp, maxHp: pd.boss1Hp, atk: pd.boss1Atk, def: 0, isBoss: true, isNewBoss: true });
+            addLog(`【最终BOSS】${pd.boss1} 登场！`);
+        } else {
+            enemies.push({ name: pd.boss2, hp: pd.boss2Hp, maxHp: pd.boss2Hp, atk: pd.boss2Atk, def: 0, isBoss: true, isNewBoss: true });
+            addLog(`【最终BOSS】${pd.boss2} 登场！`);
+        }
+    } else if (pd.type === 'party') {
+        for(let i=0; i<RND(3,5); i++) {
+            let rid = RND(1,2)===1 ? 13 : stage.mon[RND(0,stage.mon.length-1)];
+            let m = MON[rid]; enemies.push({...m, maxHp:m.hp, def:0});
+        }
+    } else if (pd.type === 'keySpirit') {
+        keySpiritActive = true;
+        enemies.push({ name: "钥匙精灵", hp: 30, maxHp: 30, atk: 0, def: 0, isKeySpirit: true });
+        addLog('钥匙精灵出现了！别让它跑了！');
+    } else {
+        let isBossWave = (pd.type === 'wave' && pd.bossWave && currentWave === pd.bossWave);
+        let isSimpleBossWave = (!stage.phases && stage.boss && currentWave === stage.maxWave);
+        if (isBossWave || isSimpleBossWave) {
+            let m = MON[stage.boss];
+            enemies.push({ name: stage.bossName || m.name, hp: stage.bossHp || m.hp, maxHp: stage.bossHp || m.hp, atk: stage.bossAtk || m.atk, def: 0, isBoss: true, isNewBoss: true });
+            addLog(`【BOSS降临】${stage.bossName || m.name}！`);
+        } else {
+            for(let i=0; i<RND(2,4); i++) {
+                let rid = stage.mon[RND(0, stage.mon.length-1)]; let m = MON[rid];
+                let mult = pd.statMult || 1.0;
+                enemies.push({...m, maxHp: Math.floor(m.hp*mult), hp: Math.floor(m.hp*mult), atk: Math.floor(m.atk*mult), def: 0, split: m.split, block: m.block, enrage: m.enrage});
+            }
+        }
+    }
+    fixTarget();
+}
+
+function upBattleUI() {
+    document.getElementById('hpText').innerText = `${playerHp}/${maxHp}`;
+    let stage = STAGE[currentStageId];
+    let waveText = '', killText = '';
+    if (stage.phases && stage.phases.length > 0) {
+        let cp = currentPhase + 1, tp = stage.phases.length;
+        waveText = `阶段${cp}/${tp} 第${currentWave}波`;
+        if (phaseData.type === 'kill' || phaseData.type === 'maze' || phaseData.type === 'keySpirit') killText = `${killCnt}/${phaseData.target || phaseData.kill}`;
+        else if (phaseData.type === 'beacon') killText = `${killCnt}/${phaseData.killCount}`;
+        else if (phaseData.type === 'party') killText = `厨师${partyChefKill}/${phaseData.chefKill}`;
+        else killText = `BOSS战`;
+    } else {
+        waveText = `${currentWave}/${stage.maxWave}波`;
+        killText = `${killCnt}`;
+    }
+    document.getElementById('waveText').innerText = waveText;
+    document.getElementById('killText').innerText = killText;
+    document.getElementById('battleGem').innerText = gem;
+    document.getElementById('soulText').innerText = soul;
+
+    let w = getEquipData('w'), r = getEquipData('r'), m = getEquipData('m'), a = getEquipData('a');
+    document.getElementById('equipBar').innerHTML = `⚔️${w.name}[${QUALITY_NAMES[w.q]}] | 🏹${r.name}[${QUALITY_NAMES[r.q]}] | ✨${m.name} | 🛡️${a.name}[${QUALITY_NAMES[a.q]}]`;
+
+    let magicBtn = document.getElementById('magicBtn');
+    let cdText = magicCd[equip.m] > 0 ? `(CD${magicCd[equip.m]})` : m.cd > 0 ? `(CD${m.cd})` : '';
+    let soulText = m.soulCost > 0 ? ` 💀${m.soulCost}` : '';
+    magicBtn.innerText = `✨${m.name}${cdText}${soulText}`;
+
+    let petBar = document.getElementById('petBar');
+    if (summonPet && summonPet.hp > 0) { petBar.style.display = 'block'; petBar.innerHTML = `🐺 ${summonPet.name}：HP ${summonPet.hp}/${summonPet.maxHp}`; }
+    else petBar.style.display = 'none';
+}
+
+function playerAct(type) {
+    if (isLock) return;
+    if (buff.suspended > 0) { addLog('悬浮中，无法行动！'); buff.suspended--; isLock = true; setTimeout(enemyRoundFull, 750); return; }
+    
+    // 行动前检查有效性，无效不消耗回合
+    if (type === 2 && rangeCd > 0) { addLog(`远程冷却中！`); return; }
+    if (type === 3) {
+        let m = getEquipData('m');
+        if (equip.m === 0) { addLog('未装备法器！'); return; }
+        if (magicCd[equip.m] > 0) { addLog(`法器冷却中！`); return; }
+        if (m.once && magicUsed[equip.m]) { addLog('法器已耗尽！'); return; }
+        if (soul < m.soulCost) { addLog(`灵魂不足！`); return; }
+    }
+
+    isLock = true;
+    if (type === 1) doMeleeFull();
+    if (type === 2) doRangeFull();
+    if (type === 3) doMagicFull();
+    
+    updateChallengeBar(); checkWaveClear();
+    setTimeout(enemyRoundFull, 750);
+}
+
+function doMeleeFull() {
+    let w = getEquipData('w'); let tar = enemies[targetIndex];
+    if (!tar || tar.hp <= 0) return;
+    if (tar.name === '末影人' && RND(1,100) <= 30) { addLog('末影人瞬移躲避！'); return; }
+    if (w.type === 'chainsaw' && chainsawHeat >= 3) { addLog('链锯剑过热！'); chainsawHeat = 0; return; }
+    if (w.type === 'chainsaw') chainsawHeat++;
+
+    let dmg = w.atk + enchants.baseAtk * 3 + buff.soulAtk;
+    if (buff.atkUp > 0) dmg = Math.floor(dmg * 1.5);
+    if (buff.berserk > 0) dmg = Math.floor(dmg * 1.5);
+    if (getEquipData('a').type === 'lowHpDmgUp' && playerHp < maxHp * 0.3) dmg = Math.floor(dmg * 1.5);
+    if (buff.nextThunder > 0) { dmg += buff.nextThunder; buff.nextThunder = 0; }
+
+    addLog(`🔪${w.name}：${w.msg}`);
+    let effectiveCrit = (w.type === 'crit' ? w.val : 0) + enchants.critRate * 2;
+    if (effectiveCrit > 0 && RND(1,100) <= effectiveCrit) { dmg = Math.floor(dmg * 2); addLog('致命暴击！'); }
+
+    if (w.type === 'armorBreak') tar.def = Math.floor(tar.def * 0.5);
+    if (w.type === 'freeze' && RND(1,100) <= w.val) { buff.iceLock[targetIndex] = 2; addLog('冰冻！'); }
+    if (w.type === 'lifesteal') { playerHp = clamp(playerHp + w.val, maxHp); addLog(`恢复${w.val}生命`); }
+    if (w.type === 'bleed') { buff.bleedStack[targetIndex] = Math.min(3, (buff.bleedStack[targetIndex] || 0) + 1); }
+    if (w.type === 'burn' && RND(1,100) <= w.val) { buff.burnTurn[targetIndex] = 2; }
+    if (w.type === 'soul') { if (buff.soulAtk < 5) buff.soulAtk++; }
+    if (w.type === 'chain') {
+        let lst = enemies.filter((x,i) => x.hp > 0 && i !== targetIndex);
+        for(let i=0; i<2 && i<lst.length; i++) { lst[i].hp = clamp(lst[i].hp - w.val, lst[i].maxHp); if(lst[i].hp<=0) killMonster(enemies.indexOf(lst[i])); }
+    }
+    if (w.type === 'healSelf') { playerHp = clamp(playerHp + w.val, maxHp); }
+    if (w.type === 'backstab' && RND(1,100) <= w.val) { dmg *= 2; addLog('背刺双倍！'); }
+    if (w.type === 'multihit' && RND(1,100) <= w.val) { dmg *= 2; }
+    if (tar.block && RND(1,100) <= tar.block) { addLog('敌人格挡！'); dmg = 0; }
+
+    let final = Math.floor(dmg * (1 - tar.def / 100));
+    tar.hp = clamp(tar.hp - final, tar.maxHp);
+    addLog(`对${tar.name}造成${final}伤害`);
+    if (tar.hp <= 0) killMonster(targetIndex);
+    fixTarget(); renderEnemy(); upBattleUI();
+}
+
+function doRangeFull() {
+    let r = getEquipData('r'); let tar = enemies[targetIndex];
+    if (!tar || tar.hp <= 0) return;
+    if (tar.name === '末影人' && RND(1,100) <= 30) { addLog('末影人瞬移躲避！'); return; }
+
+    let dmg = r.atk + enchants.baseAtk * 3;
+    if (r.type === 'energybow') { energyBowStacks = Math.min(3, energyBowStacks + 1); dmg += energyBowStacks * 5; }
+    if (buff.atkUp > 0) dmg = Math.floor(dmg * 1.5);
+    if (getEquipData('a').type === 'bowDmgUp') dmg = Math.floor(dmg * 1.2);
+
+    addLog(`🏹${r.name}：${r.msg}`);
+    if (r.type === 'firstHit' && !firstHitUsed) { dmg *= 2; firstHitUsed = true; }
+    if (r.type === 'poison') { buff.poisonTurn[targetIndex] = r.val; }
+    if (r.type === 'execute' && tar.hp / tar.maxHp <= 0.2 && RND(1,100) <= r.val) { tar.hp = 0; killMonster(targetIndex); addLog('斩杀！'); return; }
+    if (r.type === 'pierce') { let next = enemies.find((x,i) => x.hp > 0 && i !== targetIndex); if(next){ let pd=Math.floor(dmg*r.val/100); next.hp=clamp(next.hp-pd, next.maxHp); if(next.hp<=0) killMonster(enemies.indexOf(next)); } }
+    if (r.type === 'multi2') dmg = Math.floor(dmg * 0.6);
+    if (r.type === 'multi3') { let sd=Math.floor(dmg*0.4); enemies.forEach(e=>{if(e.hp>0){e.hp=clamp(e.hp-sd,e.maxHp); if(e.hp<=0) killMonster(enemies.indexOf(e));}}); dmg=0; }
+    if (r.type === 'splash') { let sd=Math.floor(dmg*0.5); enemies.forEach((e,i)=>{if(i!==targetIndex&&e.hp>0){e.hp=clamp(e.hp-sd,e.maxHp); if(e.hp<=0) killMonster(i);}}); }
+    if (r.type === 'cd2') { rangeCd = 2; }
+    if (r.type === 'instakill' && !tar.isBoss && RND(1,100) <= r.val) { tar.hp = 0; killMonster(targetIndex); addLog('秒杀！'); return; }
+    if (tar.block && RND(1,100) <= tar.block) { dmg = 0; }
+
+    if (dmg > 0) {
+        tar.hp = clamp(tar.hp - dmg, tar.maxHp);
+        if (tar.hp <= 0) killMonster(targetIndex);
+    }
+    fixTarget(); renderEnemy(); upBattleUI();
+}
+
+function doMagicFull() {
+    let m = getEquipData('m');
+    soul -= m.soulCost; magicCd[equip.m] = m.cd;
+    if (getEquipData('a').type === 'cdCut') magicCd[equip.m] = Math.max(1, m.cd - 1);
+    if (m.once) magicUsed[equip.m] = true;
+    addLog(`【${m.name}】${m.msg}`);
+
+    switch (m.type) {
+        case 'shield': buff.shield = true; break;
+        case 'itemHeal': playerHp = clamp(playerHp + 30, maxHp); break;
+        case 'buffAtk': buff.atkUp = m.val; break;
+        case 'buffReduce': buff.dmgReduce = 70; break;
+        case 'buffHide': buff.invisible = m.val; break;
+        case 'buffGem': buff.gemDouble = true; break;
+        case 'allFire': enemies.forEach((e,i) => { if(e.hp>0){ e.hp-=m.val; buff.burnTurn[i]=2; if(e.hp<=0) killMonster(i); } }); break;
+        case 'allDmg': enemies.forEach(e => { if(e.hp>0){ e.hp-=m.val; if(e.hp<=0) killMonster(enemies.indexOf(e)); } }); break;
+        case 'hpHalf': enemies.forEach(e => { if(e.hp>0){ e.hp=Math.floor(e.hp/2); if(e.hp<=0) killMonster(enemies.indexOf(e)); } }); break;
+        case 'allBind': enemies.forEach((e,i) => { buff.iceLock[i]=1; }); break;
+        case 'skipEnemy': buff.skipEnemyRound = true; break;
+        case 'summonGolem': summonPet = { name:'铁傀儡', hp:150, maxHp:150, atk:25 }; break;
+        case 'summonWarden': summonPet = { name:'潜声守卫', hp:250, maxHp:250, atk:40 }; break;
+        case 'nextThunder': buff.nextThunder = m.val; break;
+        case 'buffCrazy': buff.berserk = 3; buff.atkUp = 3; break;
+    }
+    if (m.consumable) { // 消耗品用完移除
+        let arr = own.m; let pos = arr.findIndex(o => o.idx === equip.m);
+        if (pos > -1) { arr.splice(pos, 1); equip.m = 0; }
+    }
+    renderEnemy(); upBattleUI();
+}
+
+function updateChallengeBar() {
+    let bar = document.getElementById('challengeBar');
+    bar.style.display = 'block';
+    bar.innerHTML = `⚡ 灵魂:${soul} | 宠物:${summonPet?summonPet.hp+'HP':'无'} | 锁血:${battleDeadImmuneUsed?'已用':' ready'}`;
+}
+
+// ===================== 敌人逻辑与伤害 =====================
+function killMonster(i) {
+    if (!enemies[i] || enemies[i].hp > 0) return;
+    killCnt++; totalKillsAllTime++;
+    let soulGain = enemies[i].isBoss ? 15 : 5;
+    soulGain += Math.floor(soulGain * enchants.soulGain * 0.2);
+    soul += soulGain;
+    if (totalKillsAllTime % 25 === 0) { enchantPoints++; addLog('🔮 获得1附魔点！'); }
+    let drop = RND(3, 8); if (enemies[i].isBoss) drop = RND(15, 25);
+    if (buff.gemDouble) drop *= 2;
+    gem += drop; battleStats.goldEarned += drop;
+    
+    if (enemies[i].isNewBoss) {
+        achieveProgress.bossKill = (achieveProgress.bossKill || 0) + 1;
+        // finalBoss 切换
+        if (phaseData && phaseData.type === 'finalBoss' && !phaseData._boss2Spawned) {
+            phaseData._boss2Spawned = true;
+            addLog(`${enemies[i].name}倒下！但末影之心苏醒了...`);
+            setTimeout(() => { genWaveWithPhase(); renderEnemy(); }, 1000);
+        }
+    }
+    addLog(`${enemies[i].name}倒下！+${drop}宝石 +${soulGain}灵魂`);
+    saveData();
+}
+
+function enemyRoundFull() {
+    if (buff.skipEnemyRound) { buff.skipEnemyRound = false; addLog('时空跳跃，跳过敌方回合！'); endEnemyRound(); return; }
+    let a = getEquipData('a');
+
+    if (a.type === 'turnHeal') playerHp = clamp(playerHp + a.val, maxHp);
+    if (a.type === 'turnClean') { buff.bleedStack=[]; buff.poisonTurn=[]; buff.burnTurn=[]; buff.witherTurn=[]; }
+
+    // 宠物攻击
+    if (summonPet && summonPet.hp > 0) {
+        let t = enemies.find(e => e.hp > 0);
+        if (t) { t.hp = clamp(t.hp - summonPet.atk, t.maxHp); if (t.hp <= 0) killMonster(enemies.indexOf(t)); }
+    }
+
+    // BOSS 特殊机制
+    let bossAlive = enemies.find(e => e.isNewBoss && e.hp > 0);
+    if (bossAlive) {
+        bossCounter++;
+        if (bossAlive.name === '烈焰领主' && bossAlive.hp < bossAlive.maxHp * 0.3 && bossPhase === 0) {
+            bossPhase = 1; addLog('🔥烈焰领主暴怒！');
+            if (a.type !== 'fireImmune') { playerHp = clamp(playerHp - 10, maxHp); battleStats.fireHit = true; }
+        }
+        if (bossAlive.name === '凋零风暴' && bossCounter % 3 === 0) {
+            let skull = MON[17]; enemies.push({...skull, maxHp:skull.hp, def:0});
+            addLog('💀凋零风暴召唤了凋零骷髅！');
+        }
+    }
+
+    // DOT 伤害
+    enemies.forEach((e, i) => {
+        if (e.hp <= 0) return;
+        if (buff.bleedStack[i]) { e.hp -= buff.bleedStack[i] * 2; }
+        if (buff.poisonTurn[i] > 0) { e.hp -= 3; buff.poisonTurn[i]--; }
+        if (buff.burnTurn[i] > 0) { e.hp -= 5; buff.burnTurn[i]--; }
+        if (buff.witherTurn[i] > 0) { e.hp -= 4; buff.witherTurn[i]--; }
+        if (buff.iceLock[i] > 0) { buff.iceLock[i]--; return; }
+        if (e.hp <= 0) killMonster(i);
+    });
+
+    if (buff.invisible > 0) { buff.invisible--; endEnemyRound(); return; }
+
+    // 敌人攻击
+    let alive = enemies.filter(o => o.hp > 0);
+    for (let e of alive) {
+        if (e.hp <= 0) continue;
+        // 宠物承伤逻辑：50%概率打宠物
+        if (summonPet && summonPet.hp > 0 && RND(1,100) <= 50) {
+            let petDmg = Math.floor(e.atk * 0.7);
+            summonPet.hp -= petDmg;
+            if (summonPet.hp <= 0) { addLog(`${summonPet.name} 被击溃了！`); summonPet = null; }
+            continue;
+        }
+        dealEnemyDamage(e, enemies.indexOf(e), 1.0, a);
+    }
+    endEnemyRound();
+}
+
+function dealEnemyDamage(enemyObj, realIndex, dmgMult, armorObj) {
+    if (enemyObj.hp <= 0) return;
+    let dmg = Math.floor(enemyObj.atk * dmgMult);
+    if (buff.dmgReduce > 0) dmg = Math.floor(dmg * (1 - buff.dmgReduce / 100));
+    if (buff.atkDown > 0) dmg = Math.floor(dmg * 0.7);
+    if (getEquipData('w').type === 'selfCut') dmg = Math.max(0, dmg - getEquipData('w').val); // 修复皇家长剑
+    if (armorObj.type === 'meleeRes') dmg = Math.floor(dmg * 0.8);
+    if (armorObj.type === 'bowRes' && enemyObj.name === '骷髅') dmg = Math.floor(dmg * 0.7);
+    
+    dmg = Math.floor(dmg * (1 - armorObj.cut / 100));
+    if (armorObj.type === 'explosionRes' && enemyObj.name === '苦力怕') dmg = Math.floor(dmg * (1 - armorObj.val / 100));
+    if (buff.shield) { dmg = 0; buff.shield = false; addLog('护盾抵挡！'); }
+    if (armorObj.type === 'dodge' && RND(1, 100) <= (armorObj.val + enchants.dodgeRate * 3)) { addLog('闪避成功！'); return; }
+
+    if (dmg > 0) {
+        battleStats.damageTaken += dmg; battleStats.hitTaken++;
+        if (armorObj.type === 'armorThorns') { enemyObj.hp = clamp(enemyObj.hp - Math.floor(dmg * armorObj.val / 100), enemyObj.maxHp); if (enemyObj.hp <= 0) killMonster(realIndex); }
+        
+        if (playerHp - dmg <= 0 && armorObj.type === 'deadImmune' && !battleDeadImmuneUsed) {
+            playerHp = 20; battleDeadImmuneUsed = true; addLog('末影锁血触发！保留1点生命！');
+        } else {
+            playerHp = clamp(playerHp - dmg, maxHp);
+            addLog(`${enemyObj.name} 造成${dmg}伤害`);
+        }
+        if (enemyObj.name === '潜影贝') buff.suspended = 1;
+    }
+}
+
+function endEnemyRound() {
+    for (let i = 0; i < magicCd.length; i++) if (magicCd[i] > 0) magicCd[i]--;
+    if (rangeCd > 0) rangeCd--;
+    if (buff.atkUp > 0) buff.atkUp--;
+    if (buff.berserk > 0) buff.berserk--;
+    if (buff.dmgReduce > 0) buff.dmgReduce--;
+    
+    isLock = false; fixTarget(); renderEnemy(); upBattleUI(); updateChallengeBar(); checkWaveClear();
+    
+    if (playerHp <= 0) {
+        addLog('你倒下了...'); isInBattle = false;
+        setTimeout(backMap, 1500);
+    }
+}
+
+function checkWaveClear() {
+    if (waveClearing) return;
+    let stage = STAGE[currentStageId]; let pd = phaseData;
+    if (!pd) {
+        if (enemies.every(o => o.hp <= 0)) {
+            waveClearing = true; currentWave++;
+            setTimeout(() => {
+                if (currentWave <= stage.maxWave) { genWaveWithPhase(); renderEnemy(); upBattleUI(); waveClearing = false; }
+                else { waveClearing = false; checkStageWin(); }
+            }, 1000);
+        }
+        return;
+    }
+    let phaseComplete = false;
+    if (pd.type === 'kill' && killCnt >= pd.target) phaseComplete = true;
+    if (pd.type === 'wave' && enemies.every(o => o.hp <= 0) && currentWave >= pd.count) phaseComplete = true;
+    if (pd.type === 'party' && partyChefKill >= pd.chefKill && partyOtherKill >= pd.otherKill) phaseComplete = true;
+    if (pd.type === 'beacon' && beaconActivated && enemies.every(o => o.hp <= 0) && currentWave >= pd.waveCount && killCnt >= pd.killCount) phaseComplete = true;
+    if ((pd.type === 'boss' || pd.type === 'finalBoss') && enemies.every(o => o.hp <= 0) && pd._boss2Spawned) phaseComplete = true;
+
+    if ((pd.type === 'wave' || pd.type === 'kill' || pd.type === 'party' || pd.type === 'maze' || pd.type === 'beacon') && enemies.every(o => o.hp <= 0) && !phaseComplete) {
+        waveClearing = true; currentWave++;
+        setTimeout(() => { genWaveWithPhase(); renderEnemy(); upBattleUI(); waveClearing = false; }, 1000);
+        return;
+    }
+    if (phaseComplete) {
+        waveClearing = true;
+        setTimeout(() => { waveClearing = false; advanceToNextPhaseOrWin(); }, 1000);
+    }
+}
+
+function advanceToNextPhaseOrWin() {
+    let stage = STAGE[currentStageId];
+    if (stage.phases && currentPhase + 1 < stage.phases.length) startPhase(currentPhase + 1);
+    else checkStageWin();
+}
+
+function checkStageWin() {
+    let stage = STAGE[currentStageId];
+    addLog(`✨区域征伐完成！奖励${stage.reward}宝石！`);
+    gem += stage.reward;
+    stageCompleted[currentStageId] = true;
+    if (stage.unlock >= 0 && !unlockedMaps.includes(stage.unlock)) unlockedMaps.push(stage.unlock);
+    if (stage.isFinal) { darkAgeUnlocked = true; for(let i=7;i<=10;i++) if(!unlockedMaps.includes(i)) unlockedMaps.push(i); }
+    if (currentStageId === 10) { dlcUnlocked = true; for(let i=11;i<STAGE.length;i++) if(!unlockedMaps.includes(i)) unlockedMaps.push(i); }
+    isInBattle = false; saveData();
+    setTimeout(backMap, 2000);
+}
+
+function renderEnemy() {
+    let box = document.getElementById('enemyBox'); if(!box) return;
+    box.innerHTML = '';
+    enemies.forEach((e, i) => {
+        if (e.hp <= 0) return;
+        let cls = (i === targetIndex) ? 'enemyCard selected' : 'enemyCard';
+        if (e.isBoss) cls += ' boss';
+        box.innerHTML += `<div class="${cls}" onclick="selectTarget(${i})">
+            <p>${e.name} ${e.isBoss ? '<span style="color:#ff5555">[BOSS]</span>' : ''}</p>
+            <p style="color:#ff5555">HP:${e.hp}/${e.maxHp}</p>
+        </div>`;
+    });
+}
+function selectTarget(i) { if (enemies[i] && enemies[i].hp > 0) targetIndex = i; renderEnemy(); }
+function fixTarget() { let idx = enemies.findIndex(o => o.hp > 0); targetIndex = idx > -1 ? idx : 0; }
+
+function tryRetreat() {
+    if (isLock) return; isLock = true;
+    if (Math.random() < 0.4) { addLog('撤离成功！'); isInBattle = false; setTimeout(backMap, 800); }
+    else { addLog('撤离失败，本回合放弃行动'); isLock = false; setTimeout(enemyRoundFull, 750); }
+}
+
+// ===================== 启动游戏 =====================
+(function initApp() {
+    loadData();
+    // 补丁：旧存档兼容
+    if (!achieveProgress) achieveProgress = {};
+    renderMapScreen();
+    window.addEventListener('beforeunload', saveData);
+})();
+</script>
+</body>
+</html>
